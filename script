@@ -1,0 +1,312 @@
+///////////////////////////////////////////////////////////////////////
+
+const keyword = "M&A 解説"; // 検索ワード
+
+///////////////////////////////////////////////////////////////////////
+
+const encodeKeyword = encodeURIComponent(keyword);
+
+// シートのタイトルを定義
+const sheetName = [
+  '見出し',
+  'サジェスト',
+  'Q&A',
+  'twitter',
+  '構成案'
+]
+// パターンを作成
+const map = {
+  "&amp;": "&",
+  "&quot;": '"',
+  "&lt;": "<",
+  "&gt;": ">",
+}
+// アクティブなスプレッドシートを取得
+const spreadSheet = SpreadsheetApp.getActiveSpreadsheet();
+
+const scraping = () => {  
+  scrapingTitle();
+  scrapingSuggest();
+  scrapingQA();
+  scrapingTweet();
+
+  spreadSheet.insertSheet(sheetName[4]);
+  spreadSheet.deleteSheet(spreadSheet.getSheets()[0]);
+}
+
+
+
+const escapeHTML = (element) => {
+  return element.replace(/<("[^"]*"|'[^']*'|[^'">])*>/g, '').replace(/&(lt|gt|amp|quot|#x27|#x60);/g, match => map[match]);
+}
+
+////////////////////////////////
+// 見出し
+////////////////////////////////
+
+// 見出しをスクレイピング
+const scrapingTitle = () => {
+  let html = phantomJSCloudScraping("https://related-keywords.com/result/headline?q=" + encodeKeyword);
+  let title = Parser.data(html).from('<div class="uju8so-0 jEwVEU" style="padding-bottom: 6px; padding-top: 6px;">').to('</div>').iterate();
+  let url = Parser.data(html).from('class="uju8so-9 iXVdLT">').to('</a>').iterate();
+  let wordHeadlineCount = Parser.data(html).from('<td class="sc-13h9hkj-0 uju8so-6 cBHBcm">').to('</td>').iterate();
+  let detail = Parser.data(html).from('<tr class="sc-19pl3hn-0 dQiTue">').to('</td></tr>').iterate();
+  let description = Parser.data(html).from('<div class="uju8so-14 itkBgB">').to('</div>').iterate();
+
+  // シートを挿入する
+  spreadSheet.insertSheet(sheetName[0]);
+
+  // シートを取得する
+  const sheetTitle = spreadSheet.getSheetByName(sheetName[0]);
+
+  // シートにタイトルを書き出す
+  title.map((value, index) => {
+    let plainHTML = escapeHTML(value);
+    sheetTitle.getRange(1, index + 2).setValue(plainHTML);
+  })
+
+  // シートに説明を書き出す
+  description.map((value, index) => {
+    let plainHTML = escapeHTML(value);
+    sheetTitle.getRange(2, index + 2).setValue(plainHTML);
+  })
+
+  // シートにURLを書き出す
+  url.map((value, index) => {
+    sheetTitle.getRange(3, index + 2).setValue(value);
+  })
+  
+  // シートに見出し数を書き出す
+  let headlineCount_count = 0;
+  wordHeadlineCount.map((value, index) => {
+    if (index === headlineCount_count*3+1) {
+      sheetTitle.getRange(4, headlineCount_count + 2).setValue(value);
+      headlineCount_count++;
+    }
+  })
+
+  // シートに文字数を書き出す
+  let wordCount_count = 0;
+  wordHeadlineCount.map((value, index) => {
+    if (index === wordCount_count*3+2) {
+      sheetTitle.getRange(5, wordCount_count + 2).setValue(value);
+      wordCount_count++;
+    }
+  })
+
+  // シートに見出しを書き出す
+  detail.map((value, index) => {
+    let headline = Parser.data(value).from('<div style="padding: 0px 4px; display: flex; align-items: center;">').to('<a href=').iterate();
+    let tag = Parser.data(value).from('<div class="sc-7jcrwc-2 eIAfsa">').to('</div>').iterate();
+
+    let hl = headline.map(hl_val => {
+      if (hl_val.indexOf('sc-13h9hkj-0 uju8so-6 dTxRcP') !== -1) {
+        let plainHTML = hl_val.replace(hl_val, "-");
+        return plainHTML;
+      } else {
+        let plainHTML = escapeHTML(hl_val);
+        return plainHTML;
+      }
+    })
+    tag.map((v, i) => {
+      sheetTitle.getRange(6 + i, 1 + index).setValue(v.toLowerCase() + ":" + hl[i]);
+    })
+  })
+
+  // シートに項目を書き出す
+  sheetTitle.getRange(1, 1).setValue('title');
+  sheetTitle.getRange(2, 1).setValue('description');
+  sheetTitle.getRange(3, 1).setValue('url');
+  sheetTitle.getRange(4, 1).setValue('headline count');
+  sheetTitle.getRange(5, 1).setValue('word count');
+  sheetTitle.getRange(6, 1).setValue('headline');
+
+  // シートを整形する
+  // 列の幅を定義
+  const column = {
+    width: 350, // セルの幅
+    space : 25 // 空白セルの幅
+  }
+
+  // 列数を取得
+  const columnLength = sheetTitle.getLastColumn();
+
+  // 行数を取得
+  const rowLength = sheetTitle.getLastRow();
+
+  // テキストを切り詰める
+  sheetTitle.getRange(1,1,rowLength,columnLength).setWrapStrategy(SpreadsheetApp.WrapStrategy.CLIP);
+
+  for (let i=columnLength; i>1; i--) {
+    // 列幅を変更
+    sheetTitle.setColumnWidth(i, column.width);
+    // 列を挿入*
+    sheetTitle.insertColumnAfter(i);
+    // *の列幅を変更
+    sheetTitle.setColumnWidth(i + 1, column.space);
+  }
+}
+
+
+////////////////////////////////
+// サジェスト
+////////////////////////////////
+
+// サジェストをスクレイピング
+const scrapingSuggest = () => {
+  let html = phantomJSCloudScraping("https://related-keywords.com/result/suggest?q=" + encodeKeyword);
+  let suggest1 = Parser.data(html).from('<p class="tgzl94-0 sc-1p6awuf-4 hPLymK">').to('</p>').iterate();
+  let suggest2 = Parser.data(html).from('<p class="tgzl94-0 sc-1p6awuf-4 iXFtAV">').to('</p>').iterate();
+
+  // シートを挿入する
+  spreadSheet.insertSheet(sheetName[1]);
+  
+  // シートを取得する
+  const sheetSuggest = spreadSheet.getSheetByName(sheetName[1]);
+  const lastRow = sheetSuggest.getLastRow();
+  
+  suggest1.map((value, index) => {
+    let plainHTML = escapeHTML(value);
+    sheetSuggest.getRange(index + 1, 1).setValue(plainHTML);
+  })
+
+  suggest2.map((value, index) => {
+    let plainHTML = escapeHTML(value);
+    sheetSuggest.getRange(lastRow + 1 + index, 1).setValue(plainHTML);
+  })
+}
+
+
+
+////////////////////////////////
+// Q&A
+////////////////////////////////
+
+// Q&Aをスクレイピング
+const scrapingQA = () => {
+  let html = phantomJSCloudScraping("https://related-keywords.com/result/qa?q=" + encodeKeyword);
+  let qaYahoo = Parser.data(html).from('<ul class="sc-1hue2s-0 RexML"><div class="uagq5e-0 cvjuYB">Yahoo!知恵袋</div>').to('</ul>').build();
+  let qaYahooList = Parser.data(qaYahoo).from('<p class="tgzl94-0 sc-1p6awuf-4 hPLymK">').to('</p>').iterate();
+  let qaYahooURL = Parser.data(qaYahoo).from('<a href="').to('" rel=').iterate();
+  let qaGoo = Parser.data(html).from('<ul class="sc-1hue2s-0 RexML"><div class="uagq5e-0 cvjuYB">教えて！goo</div>').to('</ul>').build();
+  let qaGooList = Parser.data(qaGoo).from('<p class="tgzl94-0 sc-1p6awuf-4 hPLymK">').to('</p>').iterate();
+  let qaGooURL = Parser.data(qaGoo).from('<a href="').to('" rel=').iterate();
+
+  // シートを挿入する
+  spreadSheet.insertSheet(sheetName[2]);
+
+  // シートを取得する
+  const sheetQa = spreadSheet.getSheetByName(sheetName[2]);
+  
+  // シートにqaYahooListを書き出す
+  qaYahooList.map((value, index) => {
+    let plainHTML = escapeHTML(value);
+    sheetQa.getRange(index + 1, 1).setValue(plainHTML);
+  })
+
+  // シートにqaYahooURLを書き出す
+  qaYahooURL.map((value, index) => {
+    sheetQa.getRange(index + 1, 2).setValue(value);
+  })
+
+  // 最後の行を取得
+  const lastRow = sheetQa.getLastRow();
+
+  // シートにqaGooGooListを書き出す
+  qaGooList.map((value, index) => {
+    let plainHTML = escapeHTML(value);
+    sheetQa.getRange(lastRow + 2 + index, 1).setValue(plainHTML);
+  })
+
+  // シートにqaGooGooURLを書き出す
+  qaGooURL.map((value, index) => {
+    sheetQa.getRange(lastRow + 2 + index, 2).setValue(value);
+  })
+
+  // シートの列の幅を変更する
+  sheetQa.setColumnWidth(1, 650);
+
+  // テキストを切り詰める
+  sheetQa.getRange(1, 1, lastRow, 1).setWrapStrategy(SpreadsheetApp.WrapStrategy.CLIP);
+}
+
+
+////////////////////////////////
+// Twitter
+////////////////////////////////
+
+// Yahooリアルタイム検索からスクレイピングする
+const scrapingTweet = () => {
+  let html = phantomJSCloudScraping("https://search.yahoo.co.jp/realtime/search?p=" + encodeKeyword + "&ei=UTF-8&ifr=tp_sc");
+  let tweet = Parser.data(html).from('<p class="Tweet_body__3JAGe">').to('</p>').iterate();
+  let date = Parser.data(html).from('<time class="Tweet_time__11Fxn">').to('</time>').iterate();
+  let author = Parser.data(html).from('<span class="Tweet_authorName__3zjzb">').to('</span>').iterate();
+
+  // シートを挿入する
+  spreadSheet.insertSheet(sheetName[3]);
+
+  // シートを取得する
+  const sheetTwitter = spreadSheet.getSheetByName(sheetName[3]);
+
+  // シートに日付を書き出す
+  date.map((value, index) => {
+    let plainHTML = escapeHTML(value);
+    sheetTwitter.getRange(index + 1, 1).setValue(plainHTML);
+
+    // シートの列の高さを変更する
+    sheetTwitter.setRowHeight(index + 1, 63);
+  })
+
+  // シートにツイートを書き出す
+  tweet.map((value, index) => {
+    let plainHTML = escapeHTML(value);
+    sheetTwitter.getRange(index + 1, 2).setValue(plainHTML);
+  })
+
+  // シートにユーザーを書き出す
+  author.map((value, index) => {
+    let plainHTML = escapeHTML(value);
+    sheetTwitter.getRange(index + 1, 3).setValue(plainHTML);
+  })
+
+  // シートの列の幅を変更する
+  sheetTwitter.setColumnWidth(1, 150);
+  sheetTwitter.setColumnWidth(2, 850);
+  sheetTwitter.setColumnWidth(3, 300);
+
+  // 最後の行を取得
+  const lastRow = sheetTwitter.getLastRow();
+
+  // テキストを折り返す
+  sheetTwitter.getRange(1, 2, lastRow, 2).setWrapStrategy(SpreadsheetApp.WrapStrategy.WRAP);
+}
+
+
+////////////////////////////////
+// PhantomJS Cloud
+////////////////////////////////
+
+const phantomJSCloudScraping = (URL) => {
+  let key = "ak-ed5fj-5w0xy-dmpc5-2enpj-3av08";
+
+  //HTTPSレスポンスに設定するペイロードのオプション項目を設定する
+  let option = {
+    url: URL,
+    renderType: "HTML",
+    outputAsJson: true,
+  };
+
+  //オプション項目をJSONにしてペイロードとして定義し、エンコードする
+  let payload = JSON.stringify(option);
+  payload = encodeURIComponent(payload);
+
+  //PhantomJsCloudのAPIリクエストを行うためのURLを設定
+  let apiUrl = "https://phantomjscloud.com/api/browser/v2/"+ key +"/?request=" + payload;
+  //設定したAPIリクエスト用URLにフェッチして、情報を取得する。
+  let response = UrlFetchApp.fetch(apiUrl);
+  //取得したjsonデータを配列データとして格納
+  let json = JSON.parse(response.getContentText());
+  //APIから取得したデータからJSから生成されたソースコードを取得
+  let source = json["content"]["data"];
+  return source;
+}
