@@ -1,6 +1,6 @@
 ///////////////////////////////////////////////////////////////////////
 
-const keyword = "M&A 解説"; // 検索ワード
+const keyword = "スクレイピング"; // 検索ワード
 
 ///////////////////////////////////////////////////////////////////////
 
@@ -14,6 +14,7 @@ const sheetName = [
   'twitter',
   '構成案'
 ]
+
 // パターンを作成
 const map = {
   "&amp;": "&",
@@ -21,6 +22,17 @@ const map = {
   "&lt;": "<",
   "&gt;": ">",
 }
+
+// パターンを作成
+const mapHeading = {
+  "H1": "h1:",
+  "H2": 'h2:',
+  "H3": "h3:",
+  "H4": "h4:",
+  "H5": "h5:",
+  "H6": "h6:",
+}
+
 // アクティブなスプレッドシートを取得
 const spreadSheet = SpreadsheetApp.getActiveSpreadsheet();
 
@@ -34,11 +46,10 @@ const scraping = () => {
   spreadSheet.deleteSheet(spreadSheet.getSheets()[0]);
 }
 
-
-
 const escapeHTML = (element) => {
   return element.replace(/<("[^"]*"|'[^']*'|[^'">])*>/g, '').replace(/&(lt|gt|amp|quot|#x27|#x60);/g, match => map[match]);
 }
+
 
 ////////////////////////////////
 // 見出し
@@ -48,9 +59,9 @@ const escapeHTML = (element) => {
 const scrapingTitle = () => {
   let html = phantomJSCloudScraping("https://related-keywords.com/result/headline?q=" + encodeKeyword);
   let title = Parser.data(html).from('<div class="uju8so-0 jEwVEU" style="padding-bottom: 6px; padding-top: 6px;">').to('</div>').iterate();
-  let url = Parser.data(html).from('class="uju8so-9 iXVdLT">').to('</a>').iterate();
+  let url = Parser.data(html).from('<div class="uju8so-0 jEwVEU">').to('</div>').iterate();
   let wordHeadlineCount = Parser.data(html).from('<td class="sc-13h9hkj-0 uju8so-6 cBHBcm">').to('</td>').iterate();
-  let detail = Parser.data(html).from('<tr class="sc-19pl3hn-0 dQiTue">').to('</td></tr>').iterate();
+  let headline = Parser.data(html).from('<tr class="sc-19pl3hn-0 dQiTue">').to('</td></tr>').iterate();
   let description = Parser.data(html).from('<div class="uju8so-14 itkBgB">').to('</div>').iterate();
 
   // シートを挿入する
@@ -73,7 +84,8 @@ const scrapingTitle = () => {
 
   // シートにURLを書き出す
   url.map((value, index) => {
-    sheetTitle.getRange(3, index + 2).setValue(value);
+    let plainHTML = escapeHTML(value);
+    sheetTitle.getRange(3, index + 2).setValue(plainHTML);
   })
   
   // シートに見出し数を書き出す
@@ -95,21 +107,14 @@ const scrapingTitle = () => {
   })
 
   // シートに見出しを書き出す
-  detail.map((value, index) => {
-    let headline = Parser.data(value).from('<div style="padding: 0px 4px; display: flex; align-items: center;">').to('<a href=').iterate();
-    let tag = Parser.data(value).from('<div class="sc-7jcrwc-2 eIAfsa">').to('</div>').iterate();
+  headline.map((value, index) => {
+    let headlineList = Parser.data(value).from('<div class="sc-7jcrwc-1 cIFBry">').to('</a></div>').iterate();
 
-    let hl = headline.map(hl_val => {
-      if (hl_val.indexOf('sc-13h9hkj-0 uju8so-6 dTxRcP') !== -1) {
-        let plainHTML = hl_val.replace(hl_val, "-");
-        return plainHTML;
-      } else {
-        let plainHTML = escapeHTML(hl_val);
-        return plainHTML;
-      }
-    })
-    tag.map((v, i) => {
-      sheetTitle.getRange(6 + i, 1 + index).setValue(v.toLowerCase() + ":" + hl[i]);
+    headlineList.map((val, i) => {
+      let plainHTML = escapeHTML(val);
+      let replacePlainHTML = plainHTML.replace(/H(1|2|3|4|5|6)/g, match => mapHeading[match]);
+      
+      sheetTitle.getRange(6 + i, 1 + index).setValue(replacePlainHTML);
     })
   })
 
@@ -155,24 +160,21 @@ const scrapingTitle = () => {
 // サジェストをスクレイピング
 const scrapingSuggest = () => {
   let html = phantomJSCloudScraping("https://related-keywords.com/result/suggest?q=" + encodeKeyword);
-  let suggest1 = Parser.data(html).from('<p class="tgzl94-0 sc-1p6awuf-4 hPLymK">').to('</p>').iterate();
-  let suggest2 = Parser.data(html).from('<p class="tgzl94-0 sc-1p6awuf-4 iXFtAV">').to('</p>').iterate();
+  let suggestList = Parser.data(html).from('<div class="sc-1mmxgk3-0 sc-1v2cwpl-0 bQDRMq">').to('<div class="sc-1mmxgk3-0 sc-1v2cwpl-0 bQDRMq">').iterate();
 
   // シートを挿入する
   spreadSheet.insertSheet(sheetName[1]);
   
   // シートを取得する
   const sheetSuggest = spreadSheet.getSheetByName(sheetName[1]);
-  const lastRow = sheetSuggest.getLastRow();
   
-  suggest1.map((value, index) => {
-    let plainHTML = escapeHTML(value);
-    sheetSuggest.getRange(index + 1, 1).setValue(plainHTML);
-  })
+  suggestList.map((value) => {
+    let suggest = Parser.data(value).from('<li class="vdu5kk-0 sc-1p6awuf-0 drqTAc">').to('</li>').iterate();
 
-  suggest2.map((value, index) => {
-    let plainHTML = escapeHTML(value);
-    sheetSuggest.getRange(lastRow + 1 + index, 1).setValue(plainHTML);
+    suggest.map((val, i) => {
+      let plainHTML = escapeHTML(val);
+      sheetSuggest.getRange(i + 1, 1).setValue(plainHTML);
+    })
   })
 }
 
