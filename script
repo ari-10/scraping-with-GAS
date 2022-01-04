@@ -289,7 +289,7 @@ const scrapingTweet = () => {
 ////////////////////////////////
 
 const phantomJSCloudScraping = (URL) => {
-  let key = "ak-ed5fj-5w0xy-dmpc5-2enpj-3av08";
+  let key = "----------------------------------";
 
   //HTTPSレスポンスに設定するペイロードのオプション項目を設定する
   let option = {
